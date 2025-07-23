@@ -40,9 +40,10 @@ const LoginForm = () => {
     
     try {
       await loginWithGoogle();
-      // Redirect happens automatically after OAuth
+      // Note: The redirect will happen automatically after OAuth flow
+      // User will be redirected back to the app and auth state will update
     } catch (err) {
-      setError(err.message || 'Failed to login with Google.');
+      setError(err.message || 'Failed to login with Google. Please ensure Google OAuth is configured in Supabase.');
       setGoogleLoading(false);
     }
   };
@@ -113,14 +114,14 @@ const LoginForm = () => {
       <button
         onClick={handleGoogleLogin}
         disabled={googleLoading}
-        className="w-full border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 font-semibold py-2 px-4 rounded-lg flex items-center justify-center transition duration-200"
+        className="w-full border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 font-semibold py-2 px-4 rounded-lg flex items-center justify-center transition duration-200 shadow-sm"
       >
         {googleLoading ? (
           <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></div>
         ) : (
-          <FcGoogle className="mr-2 text-xl" />
+          <FcGoogle className="mr-3 text-xl" />
         )}
-        {googleLoading ? 'Connecting...' : 'Continue with Google'}
+        {googleLoading ? 'Connecting with Google...' : 'Continue with Google'}
       </button>
       
       <div className="mt-6 text-center">

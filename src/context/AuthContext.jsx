@@ -21,6 +21,7 @@ export const AuthProvider = ({ children }) => {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
+          console.log('Session found:', session.user);
           // Get user data from our custom table
           const { data, error } = await supabase
             .from('users_auth_87654321')
@@ -31,14 +32,22 @@ export const AuthProvider = ({ children }) => {
           if (!error && data) {
             setUser(data);
           } else {
-            // Try to get basic user info from auth
-            setUser({
+            // Create user data from session info
+            const userData = {
               id: session.user.id,
               email: session.user.email,
-              name: session.user.user_metadata?.name || 'User',
-              avatar_url: session.user.user_metadata?.avatar_url,
+              name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'User',
+              avatar_url: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
               created_at: session.user.created_at
-            });
+            };
+            setUser(userData);
+            
+            // Try to insert user into our table
+            try {
+              await supabase.from('users_auth_87654321').insert([userData]);
+            } catch (insertError) {
+              console.log('User already exists in table or insert failed:', insertError);
+            }
           }
         } else {
           // Check for token in localStorage as fallback
@@ -80,39 +89,42 @@ export const AuthProvider = ({ children }) => {
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event, session?.user);
+        
         if (event === 'SIGNED_IN' && session) {
-          // Get user data from our custom table
-          const { data, error } = await supabase
+          // Create user data from session
+          const userData = {
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'User',
+            avatar_url: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
+            created_at: session.user.created_at
+          };
+          
+          // Try to get existing user data first
+          const { data: existingUser, error } = await supabase
             .from('users_auth_87654321')
             .select('*')
             .eq('id', session.user.id)
             .single();
             
-          if (!error && data) {
-            setUser(data);
+          if (!error && existingUser) {
+            setUser(existingUser);
           } else {
-            // Try to get basic user info from auth
-            setUser({
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.name || 'User',
-              avatar_url: session.user.user_metadata?.avatar_url,
-              created_at: session.user.created_at
-            });
+            // Set user data and try to insert
+            setUser(userData);
             
-            // Insert user into our users table if they don't exist
-            if (event === 'SIGNED_IN') {
-              await supabase.from('users_auth_87654321').insert([
-                {
-                  id: session.user.id,
-                  email: session.user.email,
-                  name: session.user.user_metadata?.name || 'User',
-                  avatar_url: session.user.user_metadata?.avatar_url,
-                  created_at: new Date().toISOString()
-                }
-              ]).select();
+            try {
+              await supabase.from('users_auth_87654321').insert([userData]);
+            } catch (insertError) {
+              console.log('User insert failed (likely already exists):', insertError);
             }
           }
+          
+          // Generate token for fallback
+          const token = generateToken(session.user.id);
+          localStorage.setItem('jwt_token', token);
+          
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           localStorage.removeItem('jwt_token');
@@ -137,7 +149,8 @@ export const AuthProvider = ({ children }) => {
         password,
         options: {
           data: {
-            name
+            name,
+            full_name: name
           }
         }
       });
@@ -145,16 +158,16 @@ export const AuthProvider = ({ children }) => {
       if (authError) throw authError;
       
       // Store user data in our users table
+      const userData = { 
+        id: authData.user.id,
+        email,
+        name,
+        created_at: new Date().toISOString()
+      };
+      
       const { data, error } = await supabase
         .from('users_auth_87654321')
-        .insert([
-          { 
-            id: authData.user.id,
-            email,
-            name,
-            created_at: new Date().toISOString()
-          }
-        ])
+        .insert([userData])
         .select()
         .single();
       
@@ -166,15 +179,9 @@ export const AuthProvider = ({ children }) => {
       const token = generateToken(authData.user.id);
       localStorage.setItem('jwt_token', token);
       
-      const userData = data || {
-        id: authData.user.id,
-        email,
-        name,
-        created_at: authData.user.created_at
-      };
-      
-      setUser(userData);
-      return userData;
+      const finalUserData = data || userData;
+      setUser(finalUserData);
+      return finalUserData;
     } catch (err) {
       setError(err.message);
       throw err;
@@ -228,25 +235,26 @@ export const AuthProvider = ({ children }) => {
   // Login with Google
   const loginWithGoogle = async () => {
     try {
-      setLoading(true);
       setError(null);
       
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin
+          redirectTo: `${window.location.origin}/#/dashboard`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
         }
       });
       
       if (error) throw error;
       
-      // Note: User will be set via the auth state change listener
+      // Note: User will be set via the auth state change listener after redirect
       
     } catch (err) {
       setError(err.message);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 

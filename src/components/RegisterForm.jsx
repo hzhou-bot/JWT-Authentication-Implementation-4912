@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { FiUser, FiMail, FiLock, FiUserPlus } from 'react-icons/fi';
+import { FcGoogle } from 'react-icons/fc';
 import SafeIcon from '../common/SafeIcon';
 
 const RegisterForm = () => {
@@ -11,8 +12,9 @@ const RegisterForm = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -38,6 +40,19 @@ const RegisterForm = () => {
       setError(err.message || 'Failed to register. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleRegister = async () => {
+    setError('');
+    setGoogleLoading(true);
+    
+    try {
+      await loginWithGoogle();
+      // Note: The redirect will happen automatically after OAuth flow
+    } catch (err) {
+      setError(err.message || 'Failed to register with Google. Please ensure Google OAuth is configured in Supabase.');
+      setGoogleLoading(false);
     }
   };
 
@@ -130,11 +145,30 @@ const RegisterForm = () => {
         </button>
       </form>
       
+      <div className="my-6 flex items-center">
+        <div className="flex-1 border-t border-gray-300"></div>
+        <div className="px-3 text-sm text-gray-500">OR</div>
+        <div className="flex-1 border-t border-gray-300"></div>
+      </div>
+      
+      <button
+        onClick={handleGoogleRegister}
+        disabled={googleLoading}
+        className="w-full border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 font-semibold py-2 px-4 rounded-lg flex items-center justify-center transition duration-200 shadow-sm"
+      >
+        {googleLoading ? (
+          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+        ) : (
+          <FcGoogle className="mr-3 text-xl" />
+        )}
+        {googleLoading ? 'Connecting with Google...' : 'Sign up with Google'}
+      </button>
+      
       <div className="mt-6 text-center">
         <p className="text-gray-600">
           Already have an account?{' '}
-          <button 
-            onClick={() => navigate('/login')} 
+          <button
+            onClick={() => navigate('/login')}
             className="text-blue-600 hover:text-blue-800 font-medium"
           >
             Login
